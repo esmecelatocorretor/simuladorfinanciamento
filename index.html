@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Simulador de Financiamento Habitacional - Price</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 20px;
+      background-color: #f9f9f9;
+    }
+    h2 {
+      color: #333;
+    }
+    input, select {
+      padding: 8px;
+      width: 100%;
+      margin-bottom: 10px;
+    }
+    button {
+      padding: 10px;
+      background-color: #2196f3;
+      color: white;
+      border: none;
+      cursor: pointer;
+      width: 100%;
+    }
+    .result {
+      margin-top: 20px;
+      background: #fff;
+      padding: 15px;
+      border-radius: 6px;
+      box-shadow: 0 0 5px #ccc;
+    }
+  </style>
+</head>
+<body>
+  <h2>Simulador de Financiamento - Tabela Price</h2>
+
+  <label>Valor do Imóvel (R$):</label>
+  <input type="number" id="valorImovel" />
+
+  <label>Entrada (R$):</label>
+  <input type="number" id="entrada" />
+
+  <label>Prazo (em anos):</label>
+  <input type="number" id="prazo" />
+
+  <label>Taxa de Juros Anual (%):</label>
+  <input type="number" id="jurosAnual" value="4.25" />
+
+  <button onclick="calcular()">Simular Financiamento</button>
+
+  <div class="result" id="resultado"></div>
+
+  <script>
+    function calcular() {
+      const valorImovel = parseFloat(document.getElementById('valorImovel').value);
+      const entrada = parseFloat(document.getElementById('entrada').value);
+      const prazo = parseInt(document.getElementById('prazo').value);
+      const jurosAnual = parseFloat(document.getElementById('jurosAnual').value);
+
+      if (isNaN(valorImovel) || isNaN(entrada) || isNaN(prazo) || isNaN(jurosAnual)) {
+        alert("Preencha todos os campos corretamente.");
+        return;
+      }
+
+      const valorFinanciado = valorImovel - entrada;
+      const meses = prazo * 12;
+      const jurosMensal = jurosAnual / 12 / 100;
+
+      const parcela = valorFinanciado * (jurosMensal / (1 - Math.pow(1 + jurosMensal, -meses)));
+      const totalPago = parcela * meses;
+      const totalJuros = totalPago - valorFinanciado;
+
+      const resultado = `
+        <strong>Resultado da Simulação:</strong><br><br>
+        Valor do imóvel: R$ ${valorImovel.toFixed(2).replace('.', ',')}<br>
+        Entrada: R$ ${entrada.toFixed(2).replace('.', ',')}<br>
+        Valor financiado: R$ ${valorFinanciado.toFixed(2).replace('.', ',')}<br>
+        Parcelas mensais: R$ ${parcela.toFixed(2).replace('.', ',')}<br>
+        Total pago ao final: R$ ${totalPago.toFixed(2).replace('.', ',')}<br>
+        Total de juros pagos: R$ ${totalJuros.toFixed(2).replace('.', ',')}
+      `;
+
+      document.getElementById('resultado').innerHTML = resultado;
+    }
+  </script>
+</body>
+</html>
