@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8">
-  <title>Simulador de Financiamento Habitacional - Price</title>
+  <title>Simulador de Financiamento Habitacional</title>
   <style>
     body {
       font-family: Arial, sans-serif;
@@ -35,7 +35,13 @@
   </style>
 </head>
 <body>
-  <h2>Simulador de Financiamento - Tabela Price</h2>
+  <h2>Simulador de Financiamento Habitacional</h2>
+
+  <label>Tipo de Tabela:</label>
+  <select id="tipoTabela">
+    <option value="price">Price</option>
+    <option value="sac">SAC</option>
+  </select>
 
   <label>Valor do Imóvel (R$):</label>
   <input type="number" id="valorImovel" />
@@ -49,38 +55,80 @@
   <label>Taxa de Juros Anual (%):</label>
   <input type="number" id="jurosAnual" value="4.25" />
 
+  <label>Percentual de Redução no Juros (% de 1 a 95):</label>
+  <input type="number" id="reducaoJuros" value="0" min="0" max="95" />
+
+  <label>Possui 3 anos de FGTS?</label>
+  <select id="temFgts">
+    <option value="sim">Sim</option>
+    <option value="nao">Não</option>
+  </select>
+
+  <label>Possui conta na Caixa Econômica Federal?</label>
+  <select id="temContaCaixa">
+    <option value="sim">Sim</option>
+    <option value="nao">Não</option>
+  </select>
+
+  <label>Sua Renda Mensal (R$):</label>
+  <input type="number" id="renda" />
+
+  <label>Renda de Parceiro(a) (R$):</label>
+  <input type="number" id="rendaParceiro" />
+
   <button onclick="calcular()">Simular Financiamento</button>
 
   <div class="result" id="resultado"></div>
 
   <script>
     function calcular() {
+      const tipoTabela = document.getElementById('tipoTabela').value;
       const valorImovel = parseFloat(document.getElementById('valorImovel').value);
       const entrada = parseFloat(document.getElementById('entrada').value);
       const prazo = parseInt(document.getElementById('prazo').value);
-      const jurosAnual = parseFloat(document.getElementById('jurosAnual').value);
+      const jurosBase = parseFloat(document.getElementById('jurosAnual').value);
+      const reducaoJuros = parseFloat(document.getElementById('reducaoJuros').value);
+      const temFgts = document.getElementById('temFgts').value;
+      const temContaCaixa = document.getElementById('temContaCaixa').value;
+      const renda = parseFloat(document.getElementById('renda').value);
+      const rendaParceiro = parseFloat(document.getElementById('rendaParceiro').value);
 
-      if (isNaN(valorImovel) || isNaN(entrada) || isNaN(prazo) || isNaN(jurosAnual)) {
+      if (isNaN(valorImovel) || isNaN(entrada) || isNaN(prazo) || isNaN(jurosBase)) {
         alert("Preencha todos os campos corretamente.");
         return;
       }
 
       const valorFinanciado = valorImovel - entrada;
       const meses = prazo * 12;
-      const jurosMensal = jurosAnual / 12 / 100;
+      const jurosEfetivo = jurosBase * (1 - (reducaoJuros / 100));
+      const jurosMensal = jurosEfetivo / 12 / 100;
+      const rendaTotal = renda + rendaParceiro;
 
-      const parcela = valorFinanciado * (jurosMensal / (1 - Math.pow(1 + jurosMensal, -meses)));
+      let parcela = 0;
+      if (tipoTabela === 'price') {
+        parcela = valorFinanciado * (jurosMensal / (1 - Math.pow(1 + jurosMensal, -meses)));
+      } else {
+        // Tabela SAC
+        const amortizacao = valorFinanciado / meses;
+        parcela = amortizacao + (valorFinanciado * jurosMensal); // Primeira parcela (maior)
+      }
+
       const totalPago = parcela * meses;
       const totalJuros = totalPago - valorFinanciado;
 
       const resultado = `
         <strong>Resultado da Simulação:</strong><br><br>
+        Tipo de Tabela: ${tipoTabela.toUpperCase()}<br>
         Valor do imóvel: R$ ${valorImovel.toFixed(2).replace('.', ',')}<br>
         Entrada: R$ ${entrada.toFixed(2).replace('.', ',')}<br>
         Valor financiado: R$ ${valorFinanciado.toFixed(2).replace('.', ',')}<br>
-        Parcelas mensais: R$ ${parcela.toFixed(2).replace('.', ',')}<br>
+        Juros anual com redução: ${jurosEfetivo.toFixed(2).replace('.', ',')}%<br>
+        Parcelas mensais (aproximadas): R$ ${parcela.toFixed(2).replace('.', ',')}<br>
         Total pago ao final: R$ ${totalPago.toFixed(2).replace('.', ',')}<br>
-        Total de juros pagos: R$ ${totalJuros.toFixed(2).replace('.', ',')}
+        Total de juros pagos: R$ ${totalJuros.toFixed(2).replace('.', ',')}<br><br>
+        FGTS: ${temFgts.toUpperCase()}<br>
+        Conta na Caixa: ${temContaCaixa.toUpperCase()}<br>
+        Renda total familiar: R$ ${rendaTotal.toFixed(2).replace('.', ',')}
       `;
 
       document.getElementById('resultado').innerHTML = resultado;
