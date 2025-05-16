@@ -3,19 +3,23 @@
 <head>
   <meta charset="UTF-8">
   <title>Simulador de Financiamento Habitacional</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <style>
     body {
       font-family: Arial, sans-serif;
       padding: 20px;
-      background-color: #f9f9f9;
+      background-color: #f0f4f8;
     }
     h2 {
-      color: #333;
+      color: #222;
     }
     input, select {
       padding: 8px;
       width: 100%;
       margin-bottom: 10px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
     }
     button {
       padding: 10px;
@@ -24,6 +28,7 @@
       border: none;
       cursor: pointer;
       width: 100%;
+      border-radius: 4px;
     }
     .result {
       margin-top: 20px;
@@ -31,6 +36,10 @@
       padding: 15px;
       border-radius: 6px;
       box-shadow: 0 0 5px #ccc;
+    }
+    canvas {
+      max-width: 100%;
+      margin-top: 20px;
     }
   </style>
 </head>
@@ -55,7 +64,7 @@
   <label>Taxa de Juros Anual (%):</label>
   <input type="number" id="jurosAnual" value="4.25" />
 
-  <label>Percentual de Redução no Juros (% de 1 a 95):</label>
+  <label>Percentual de Redução no Juros (% de 0 a 95):</label>
   <input type="number" id="reducaoJuros" value="0" min="0" max="95" />
 
   <label>Possui 3 anos de FGTS?</label>
@@ -64,21 +73,23 @@
     <option value="nao">Não</option>
   </select>
 
-  <label>Possui conta na Caixa Econômica Federal?</label>
+  <label>Conta na Caixa?</label>
   <select id="temContaCaixa">
     <option value="sim">Sim</option>
     <option value="nao">Não</option>
   </select>
 
-  <label>Sua Renda Mensal (R$):</label>
+  <label>Renda Mensal (R$):</label>
   <input type="number" id="renda" />
 
   <label>Renda de Parceiro(a) (R$):</label>
   <input type="number" id="rendaParceiro" />
 
   <button onclick="calcular()">Simular Financiamento</button>
+  <button onclick="gerarPDF()">Gerar PDF</button>
 
   <div class="result" id="resultado"></div>
+  <canvas id="grafico"></canvas>
 
   <script>
     function calcular() {
@@ -86,52 +97,93 @@
       const valorImovel = parseFloat(document.getElementById('valorImovel').value);
       const entrada = parseFloat(document.getElementById('entrada').value);
       const prazo = parseInt(document.getElementById('prazo').value);
-      const jurosBase = parseFloat(document.getElementById('jurosAnual').value);
+      let jurosBase = parseFloat(document.getElementById('jurosAnual').value);
       const reducaoJuros = parseFloat(document.getElementById('reducaoJuros').value);
       const temFgts = document.getElementById('temFgts').value;
       const temContaCaixa = document.getElementById('temContaCaixa').value;
       const renda = parseFloat(document.getElementById('renda').value);
       const rendaParceiro = parseFloat(document.getElementById('rendaParceiro').value);
 
-      if (isNaN(valorImovel) || isNaN(entrada) || isNaN(prazo) || isNaN(jurosBase)) {
-        alert("Preencha todos os campos corretamente.");
-        return;
-      }
-
+      const rendaTotal = renda + rendaParceiro;
       const valorFinanciado = valorImovel - entrada;
       const meses = prazo * 12;
+
+      if (temContaCaixa === 'sim') jurosBase -= 0.5;
+
       const jurosEfetivo = jurosBase * (1 - (reducaoJuros / 100));
       const jurosMensal = jurosEfetivo / 12 / 100;
-      const rendaTotal = renda + rendaParceiro;
 
       let parcela = 0;
+      let parcelasArray = [];
       if (tipoTabela === 'price') {
         parcela = valorFinanciado * (jurosMensal / (1 - Math.pow(1 + jurosMensal, -meses)));
+        parcelasArray = Array.from({ length: meses }, () => parcela);
       } else {
-        // Tabela SAC
         const amortizacao = valorFinanciado / meses;
-        parcela = amortizacao + (valorFinanciado * jurosMensal); // Primeira parcela (maior)
+        for (let i = 0; i < meses; i++) {
+          parcelasArray.push(amortizacao + (valorFinanciado - amortizacao * i) * jurosMensal);
+        }
+        parcela = parcelasArray[0];
       }
 
-      const totalPago = parcela * meses;
+      let subsidio = 0;
+      if (rendaTotal <= 2640) subsidio = 20000;
+      else if (rendaTotal <= 4400) subsidio = 10000;
+
+      const totalPago = parcelasArray.reduce((a, b) => a + b, 0);
       const totalJuros = totalPago - valorFinanciado;
 
-      const resultado = `
+      let aviso = '';
+      if (parcela > rendaTotal * 0.3) {
+        aviso = `<strong style="color:red">AVISO:</strong> A parcela excede 30% da renda familiar. Limite ideal: R$ ${(rendaTotal * 0.3).toFixed(2).replace('.', ',')}<br><br>`;
+      }
+
+      const resultadoHTML = `
+        ${aviso}
         <strong>Resultado da Simulação:</strong><br><br>
         Tipo de Tabela: ${tipoTabela.toUpperCase()}<br>
         Valor do imóvel: R$ ${valorImovel.toFixed(2).replace('.', ',')}<br>
         Entrada: R$ ${entrada.toFixed(2).replace('.', ',')}<br>
         Valor financiado: R$ ${valorFinanciado.toFixed(2).replace('.', ',')}<br>
         Juros anual com redução: ${jurosEfetivo.toFixed(2).replace('.', ',')}%<br>
-        Parcelas mensais (aproximadas): R$ ${parcela.toFixed(2).replace('.', ',')}<br>
+        Primeira parcela: R$ ${parcela.toFixed(2).replace('.', ',')}<br>
         Total pago ao final: R$ ${totalPago.toFixed(2).replace('.', ',')}<br>
-        Total de juros pagos: R$ ${totalJuros.toFixed(2).replace('.', ',')}<br><br>
+        Total de juros pagos: R$ ${totalJuros.toFixed(2).replace('.', ',')}<br>
+        Subsídio aplicado: R$ ${subsidio.toFixed(2).replace('.', ',')}<br><br>
         FGTS: ${temFgts.toUpperCase()}<br>
         Conta na Caixa: ${temContaCaixa.toUpperCase()}<br>
         Renda total familiar: R$ ${rendaTotal.toFixed(2).replace('.', ',')}
       `;
 
-      document.getElementById('resultado').innerHTML = resultado;
+      document.getElementById('resultado').innerHTML = resultadoHTML;
+
+      const ctx = document.getElementById('grafico').getContext('2d');
+      new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: parcelasArray.map((_, i) => i + 1),
+          datasets: [{
+            label: 'Valor da Parcela (R$)',
+            data: parcelasArray,
+            borderColor: '#2196f3',
+            fill: false
+          }]
+        },
+        options: {
+          responsive: true,
+          plugins: {
+            legend: { display: true }
+          }
+        }
+      });
+    }
+
+    function gerarPDF() {
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF();
+      const resultado = document.getElementById("resultado").innerText;
+      doc.text(resultado, 10, 10);
+      doc.save("simulacao_financiamento.pdf");
     }
   </script>
 </body>
