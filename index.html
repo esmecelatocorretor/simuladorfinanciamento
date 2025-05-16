@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-  <meta charset="UTF-8">
+  <meta charset="UTF-8" />
   <title>Simulador de Financiamento Habitacional</title>
   <style>
     body {
@@ -16,6 +16,7 @@
       padding: 8px;
       width: 100%;
       margin-bottom: 10px;
+      box-sizing: border-box;
     }
     button {
       padding: 10px;
@@ -32,23 +33,35 @@
       border-radius: 6px;
       box-shadow: 0 0 5px #ccc;
     }
-    .info {
-      background-color: #fff3cd;
+    .info-box {
+      background: #e3f2fd;
+      border-left: 5px solid #2196f3;
       padding: 15px;
-      margin-bottom: 15px;
-      border-left: 6px solid #ffeeba;
+      margin-bottom: 20px;
       font-size: 14px;
+      color: #0d47a1;
+      border-radius: 4px;
+    }
+    .highlight {
+      font-weight: bold;
+      color: #d32f2f;
     }
   </style>
 </head>
 <body>
   <h2>Simulador de Financiamento Habitacional</h2>
 
-  <div class="info">
-    <strong>Tabela PRICE</strong><br>
-    Exemplo: Primeira parcela: R$ 850,00 – Última parcela: R$ 850,00<br><br>
-    <strong>Tabela SAC</strong><br>
-    Exemplo: Primeira parcela: R$ 950,00 – Última parcela: R$ 500,00
+  <div class="info-box">
+    <p><strong>Tabela PRICE</strong><br />
+      Exemplo:<br />
+      Primeira parcela: R$ 850,00<br />
+      Última parcela: R$ 850,00
+    </p>
+    <p><strong>Tabela SAC</strong><br />
+      Exemplo:<br />
+      Primeira parcela: R$ 950,00<br />
+      Última parcela: R$ 500,00
+    </p>
   </div>
 
   <label>Tipo de Tabela:</label>
@@ -64,12 +77,12 @@
   <input type="number" id="entrada" />
 
   <label>Prazo (em anos):</label>
-  <input type="number" id="prazo" />
+  <input type="number" id="prazo" max="35" />
 
   <label>Taxa de Juros Anual (%):</label>
-  <input type="number" id="jurosAnual" value="4.25" />
+  <input type="number" id="jurosAnual" value="4.25" step="0.01" />
 
-  <label>Percentual de Redução no Juros (% de 1 a 95):</label>
+  <label>Percentual de Redução no Juros (% de 0 a 95):</label>
   <input type="number" id="reducaoJuros" value="0" min="0" max="95" />
 
   <label>Possui 3 anos de FGTS?</label>
@@ -104,55 +117,69 @@
       const reducaoJuros = parseFloat(document.getElementById('reducaoJuros').value);
       const temFgts = document.getElementById('temFgts').value;
       const temContaCaixa = document.getElementById('temContaCaixa').value;
-      const renda = parseFloat(document.getElementById('renda').value);
-      const rendaParceiro = parseFloat(document.getElementById('rendaParceiro').value);
+      const renda = parseFloat(document.getElementById('renda').value) || 0;
+      const rendaParceiro = parseFloat(document.getElementById('rendaParceiro').value) || 0;
 
-      if (isNaN(valorImovel) || isNaN(entrada) || isNaN(prazo) || isNaN(jurosBase)) {
-        alert("Preencha todos os campos corretamente.");
+      if (
+        isNaN(valorImovel) || valorImovel <= 0 ||
+        isNaN(entrada) || entrada < 0 ||
+        isNaN(prazo) || prazo <= 0 || prazo > 35 ||
+        isNaN(jurosBase) || jurosBase <= 0 ||
+        isNaN(reducaoJuros) || reducaoJuros < 0 || reducaoJuros > 95
+      ) {
+        alert("Por favor, preencha todos os campos corretamente. Prazo máximo é 35 anos, juros e redução dentro do permitido.");
         return;
       }
 
-      const valorFinanciado = valorImovel - entrada;
+      // Valor máximo liberado pela Caixa é 80% do valor do imóvel
+      const valorLiberadoMax = valorImovel * 0.80;
+      // O valor financiado será o mínimo entre o solicitado (valorImovel - entrada) e o limite da Caixa
+      const valorSolicitado = valorImovel - entrada;
+      const valorFinanciado = Math.min(valorSolicitado, valorLiberadoMax);
+
       const meses = prazo * 12;
+      // Juros efetivo com redução aplicada
       const jurosEfetivo = jurosBase * (1 - (reducaoJuros / 100));
       const jurosMensal = jurosEfetivo / 12 / 100;
       const rendaTotal = renda + rendaParceiro;
 
       let parcela = 0;
-      let parcelaInicial = 0;
-      let parcelaFinal = 0;
-      let totalPago = 0;
-      let totalJuros = 0;
+      let primeiraParcela = 0;
+      let ultimaParcela = 0;
 
       if (tipoTabela === 'price') {
         parcela = valorFinanciado * (jurosMensal / (1 - Math.pow(1 + jurosMensal, -meses)));
-        totalPago = parcela * meses;
-        totalJuros = totalPago - valorFinanciado;
-        parcelaInicial = parcelaFinal = parcela;
+        primeiraParcela = parcela;
+        ultimaParcela = parcela;
       } else {
-        // SAC
+        // Tabela SAC
         const amortizacao = valorFinanciado / meses;
-        parcelaInicial = amortizacao + (valorFinanciado * jurosMensal);
-        parcelaFinal = amortizacao + (amortizacao * jurosMensal); // último saldo = 1x amortização
-        totalPago = 0;
-        for (let i = 0; i < meses; i++) {
-          const saldo = valorFinanciado - (amortizacao * i);
-          const parcelaAtual = amortizacao + (saldo * jurosMensal);
-          totalPago += parcelaAtual;
-        }
-        totalJuros = totalPago - valorFinanciado;
+        primeiraParcela = amortizacao + (valorFinanciado * jurosMensal);
+        ultimaParcela = amortizacao + (amortizacao * jurosMensal); // juros do último mês incidem sobre amortização pequena
+        parcela = primeiraParcela; // para simplificação mostramos a primeira parcela
       }
 
+      const totalPago = parcela * meses;
+      const totalJuros = totalPago - valorFinanciado;
+
       const resultado = `
+        <p class="highlight">Valor máximo liberado pela Caixa Econômica Federal:</p>
+        <p><strong>R$ ${valorLiberadoMax.toFixed(2).replace('.', ',')}</strong> (80% do valor do imóvel)</p>
+        <p>Este é o limite máximo independente do valor de entrada ou valor solicitado.</p>
+
+        <hr />
+
         <strong>Resultado da Simulação:</strong><br><br>
         Tipo de Tabela: ${tipoTabela.toUpperCase()}<br>
         Valor do imóvel: R$ ${valorImovel.toFixed(2).replace('.', ',')}<br>
         Entrada: R$ ${entrada.toFixed(2).replace('.', ',')}<br>
-        Valor financiado: R$ ${valorFinanciado.toFixed(2).replace('.', ',')}<br>
+        Valor solicitado para financiamento: R$ ${valorSolicitado.toFixed(2).replace('.', ',')}<br>
+        <strong>Valor financiado considerado para cálculo:</strong> R$ ${valorFinanciado.toFixed(2).replace('.', ',')}<br>
         Juros anual com redução: ${jurosEfetivo.toFixed(2).replace('.', ',')}%<br>
-        Parcelas mensais:<br>
-        - Primeira parcela: R$ ${parcelaInicial.toFixed(2).replace('.', ',')}<br>
-        - Última parcela: R$ ${parcelaFinal.toFixed(2).replace('.', ',')}<br>
+        Prazo: ${prazo} anos (${meses} meses)<br>
+        Primeira parcela: R$ ${primeiraParcela.toFixed(2).replace('.', ',')}<br>
+        Última parcela: R$ ${ultimaParcela.toFixed(2).replace('.', ',')}<br>
+        Parcelas mensais (aproximadas): R$ ${parcela.toFixed(2).replace('.', ',')}<br>
         Total pago ao final: R$ ${totalPago.toFixed(2).replace('.', ',')}<br>
         Total de juros pagos: R$ ${totalJuros.toFixed(2).replace('.', ',')}<br><br>
         FGTS: ${temFgts.toUpperCase()}<br>
